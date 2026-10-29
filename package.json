@@ -1,0 +1,15 @@
+{
+  "name": "alio-bulk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "알리오(공공기관 경영정보 공개시스템) 항목별 공시 자료 일괄 내려받기 웹앱",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "test": "node tests/api.test.mjs"
+  },
+  "license": "MIT"
+}

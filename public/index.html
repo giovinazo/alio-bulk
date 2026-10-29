@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>알리오 일괄 내려받기</title>
+  <meta name="description" content="공공기관 경영정보 공개시스템(알리오)의 항목별 공시 자료를 여러 기관·여러 항목에 걸쳐 한 번에 내려받는 도구">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div class="brand">
+        <img src="favicon.svg" alt="" width="36" height="36">
+        <div>
+          <h1>알리오 일괄 내려받기</h1>
+          <p class="lead">공공기관 경영정보 공개시스템(알리오)의 항목별 공시 자료를 여러 기관·여러 항목에 걸쳐 한 번에 받습니다. 기관 355곳, 공시 항목 93개.</p>
+        </div>
+      </div>
+      <nav class="links">
+        <a href="https://www.alio.go.kr/item/itemList.do" target="_blank" rel="noopener">알리오 항목별 공시</a>
+        <a href="https://github.com/giovinazo/alio-bulk" target="_blank" rel="noopener">소스(GitHub)</a>
+        <a href="https://github.com/giovinazo/alio-crawler" target="_blank" rel="noopener">파이썬 데스크톱판</a>
+        <a href="https://github.com/giovinazo/alio-mcp" target="_blank" rel="noopener">MCP판</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <p id="status" class="status" aria-live="polite">목록을 불러오는 중…</p>
+
+    <!-- 1단계: 항목 -->
+    <section class="step" id="step1">
+      <h2><span class="num">1</span> 공시 항목 고르기 <span class="count" id="itemCount">선택 0개</span></h2>
+      <div class="toolbar">
+        <input id="itemSearch" type="search" placeholder="항목 이름 검색 (예: 감사, 임원, 복리후생)">
+        <button type="button" id="itemAll" class="ghost">보이는 항목 모두 선택</button>
+        <button type="button" id="itemNone" class="ghost">모두 해제</button>
+        <span class="legend">
+          <i class="tag k-regular">정기</i> 최신 보고서 PDF+첨부
+          <i class="tag k-susi">수시</i> 기관별 글의 PDF+첨부
+          <i class="tag k-board">게시판</i> 글의 첨부+본문 텍스트
+          <i class="tag k-rule">규정</i> 규정별 최신 파일
+        </span>
+      </div>
+      <div id="itemTree" class="tree" aria-label="공시 항목 목록"></div>
+    </section>
+
+    <!-- 2단계: 기관 -->
+    <section class="step" id="step2">
+      <h2><span class="num">2</span> 기관 고르기 <span class="count" id="organCount">선택 0개</span></h2>
+      <div class="toolbar">
+        <select id="fType" aria-label="기관유형"><option value="">기관유형 전체</option></select>
+        <select id="fDept" aria-label="주무부처"><option value="">주무부처 전체</option></select>
+        <select id="fRegion" aria-label="지역"><option value="">지역 전체</option></select>
+        <input id="organSearch" type="search" placeholder="기관명 검색">
+        <button type="button" id="organAll" class="ghost">걸러진 기관 모두 선택</button>
+        <button type="button" id="organNone" class="ghost">모두 해제</button>
+      </div>
+      <div class="tablewrap">
+        <table id="organTable">
+          <thead>
+            <tr>
+              <th class="c-chk"><input type="checkbox" id="organHead" aria-label="걸러진 기관 전체 선택"></th>
+              <th>기관명</th>
+              <th>기관유형</th>
+              <th>주무부처</th>
+              <th>지역</th>
+            </tr>
+          </thead>
+          <tbody id="organBody"><tr><td colspan="5" class="empty">불러오는 중…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3단계: 방식 -->
+    <section class="step" id="step3">
+      <h2><span class="num">3</span> 내려받기 방식</h2>
+      <div class="options">
+        <fieldset>
+          <legend>저장 방식</legend>
+          <label><input type="radio" name="save" value="zip" checked> ZIP 파일 하나로 <small id="zipNote"></small></label>
+          <label><input type="radio" name="save" value="folder" id="saveFolder"> 폴더에 바로 저장 <small id="folderNote">(크롬·엣지)</small></label>
+          <p class="hint">파일은 <code>항목/기관/파일</code> 순서의 폴더로 정리되고, 맨 위에 <code>_수집목록.csv</code>가 들어갑니다.</p>
+        </fieldset>
+        <fieldset>
+          <legend>수시·게시판형 항목의 범위</legend>
+          <label><input type="radio" name="range" value="latest" checked> 기관마다 최신 글 1건</label>
+          <label><input type="radio" name="range" value="years"> 연도 범위
+            <input type="number" id="yearFrom" min="2000" max="2100" value="2024" aria-label="시작 연도"> ~
+            <input type="number" id="yearTo" min="2000" max="2100" value="2026" aria-label="끝 연도"></label>
+          <label><input type="radio" name="range" value="all"> 전체 (기관·항목당 300건까지)</label>
+          <p class="hint">정기공시는 현재 공시된 최신 보고서를 받습니다. 내부규정은 규정마다 최신 파일 하나를 받습니다.</p>
+        </fieldset>
+        <fieldset>
+          <legend>받을 내용</legend>
+          <label><input type="checkbox" id="optPdf" checked> 공시 본문 PDF</label>
+          <label><input type="checkbox" id="optAttach" checked> 첨부파일 (한글·PDF·엑셀 등)</label>
+          <label><input type="checkbox" id="optText" checked> 게시판 글의 본문·링크 텍스트(.txt)</label>
+        </fieldset>
+        <fieldset>
+          <legend>속도</legend>
+          <label>동시 요청 수
+            <select id="optConc">
+              <option value="1">1 (가장 조심)</option>
+              <option value="2">2</option>
+              <option value="3" selected>3 (권장)</option>
+              <option value="4">4</option>
+            </select>
+          </label>
+          <p class="hint">알리오 서버에 부담을 주지 않도록 3 이하를 권합니다. 거부 응답이 이어지면 자동으로 1분 쉬었다가 계속합니다.</p>
+        </fieldset>
+      </div>
+    </section>
+
+    <!-- 4단계: 실행 -->
+    <section class="step" id="step4">
+      <h2><span class="num">4</span> 실행</h2>
+      <div class="runbar">
+        <p id="summary" class="summary">항목과 기관을 고르면 작업량이 여기에 표시됩니다.</p>
+        <div class="btns">
+          <button type="button" id="btnRun" class="primary" disabled>일괄 내려받기</button>
+          <button type="button" id="btnStop" disabled>중지</button>
+        </div>
+      </div>
+      <div class="progress" aria-hidden="true"><div id="bar"></div></div>
+      <p id="stats" class="stats"></p>
+      <div class="logbox">
+        <div class="logbar">
+          <b>진행 기록</b>
+          <span>
+            <button type="button" id="btnCopyLog" class="ghost small">복사</button>
+            <button type="button" id="btnClearLog" class="ghost small">지우기</button>
+          </span>
+        </div>
+        <pre id="log" aria-live="polite"></pre>
+      </div>
+      <div id="failBox" class="failbox" hidden>
+        <b id="failTitle"></b>
+        <button type="button" id="btnFailCsv" class="ghost small">실패 목록 CSV</button>
+        <button type="button" id="btnRetry" class="small">실패만 다시 받기</button>
+      </div>
+    </section>
+
+    <details class="about">
+      <summary>어떻게 동작하나요</summary>
+      <ul>
+        <li>이 사이트는 알리오의 공개 자료를 그때그때 중계만 하며, 서버에 파일을 저장하지 않습니다. 파일은 브라우저가 받아 ZIP으로 묶거나 폴더에 바로 씁니다.</li>
+        <li>정기공시(정기)는 항목별 기관 목록에서 현재 공시번호를 찾아 본문 PDF와 부속 첨부를 받습니다. 수시공시(수시)는 기관마다 글 목록을 조회한 뒤 받습니다.</li>
+        <li>게시판형(게시판)은 글마다 첨부파일을 받고, 본문과 바깥 링크(나라장터 등)를 텍스트 파일로 남깁니다. 내부규정(규정)은 규정 목록을 훑어 규정마다 최신 파일을 받습니다.</li>
+        <li>같은 기능의 <a href="https://github.com/giovinazo/alio-crawler" target="_blank" rel="noopener">파이썬 데스크톱판</a>과 <a href="https://github.com/giovinazo/alio-mcp" target="_blank" rel="noopener">MCP판</a>이 있습니다. 알리오 호출 규약은 세 도구가 같습니다.</li>
+        <li>문제가 있거나 항목이 바뀌었으면 <a href="https://github.com/giovinazo/alio-bulk/issues" target="_blank" rel="noopener">GitHub 이슈</a>로 알려 주세요.</li>
+      </ul>
+    </details>
+  </main>
+
+  <footer class="wrap foot">
+    <span>자료 출처: 공공기관 경영정보 공개시스템(알리오, www.alio.go.kr). 이 도구는 알리오와 무관한 개인 제작물입니다.</span>
+    <span>MIT 라이선스 · <a href="https://github.com/giovinazo/alio-bulk" target="_blank" rel="noopener">giovinazo/alio-bulk</a></span>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
