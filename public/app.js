@@ -11,6 +11,9 @@ const KIND = {
   rule: { label: '규정', title: '내부규정: 규정마다 최신 파일' },
 };
 const MAX_LIST_PAGES = 30; // 수시·게시판 "전체" 범위에서 기관·항목당 훑는 최대 쪽수(10건/쪽)
+// 한 번 실행에 받는 용량 상한(2GB). 넘으면 받은 것까지 저장하고 멈춘다.
+// 주소에 ?limitMB=N 을 붙이면 상한을 낮출 수만 있다(시험용, 올릴 수는 없음).
+const RUN_LIMIT_BYTES = Math.min(2 * 1024 ** 3, (Number(new URLSearchParams(location.search).get('limitMB')) || Infinity) * 1024 ** 2);
 const LS_KEY = 'alio-bulk.v1';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -462,6 +465,14 @@ async function gate(ctx) {
   if (ctx.signal.aborted) throw abortError();
 }
 
+/** 한 번 실행의 용량 상한을 넘으면 멈춘다. */
+function checkLimit(ctx) {
+  if (ctx.capped || ctx.stats.bytes < RUN_LIMIT_BYTES) return;
+  ctx.capped = true;
+  log(`■ 한 번에 받을 수 있는 ${fmtBytes(RUN_LIMIT_BYTES)}에 이르러 멈춥니다. 받은 것까지는 저장됩니다. 나머지는 범위를 나눠 다시 받거나, 대량 수집은 파이썬 데스크톱판·MCP판을 쓰세요.`);
+  state.abort.abort();
+}
+
 /** 연속 실패가 쌓이면 잠시 쉬고, 그래도 계속되면 멈춘다(알리오 거부·장애 대비). */
 function noteFailure(ctx) {
   ctx.streak++;
@@ -521,6 +532,7 @@ async function grab(ctx, queue, unit, task, folder, preferredName, meta) {
       record(ctx, unit, meta, path, blob.size, '성공');
       log(`✓ ${unit.organ.name} · ${unit.item.name} · ${fileName} (${fmtBytes(blob.size)})`);
       updateProgress(ctx);
+      checkLimit(ctx);
       return true;
     } catch (e) {
       if (isAbort(e)) throw e;
@@ -890,7 +902,8 @@ async function run(retryFailures = null) {
     await producer;
     await sink.finish();
     const s = ctx.stats;
-    log(`■ 끝: 파일 ${s.files}개 (${fmtBytes(s.bytes)}) · 실패 ${s.fail} · 없음 ${s.skip} · ${fmtElapsed(Date.now() - ctx.startedAt)}${ctx.signal.aborted ? ' · 중지됨(받은 것까지 저장)' : ''}`);
+    const why = ctx.capped ? ' · 용량 상한으로 멈춤(받은 것까지 저장)' : ctx.signal.aborted ? ' · 중지됨(받은 것까지 저장)' : '';
+    log(`■ 끝: 파일 ${s.files}개 (${fmtBytes(s.bytes)}) · 실패 ${s.fail} · 없음 ${s.skip} · ${fmtElapsed(Date.now() - ctx.startedAt)}${why}`);
   } catch (e) {
     state.abort.abort();
     queue.cancel();

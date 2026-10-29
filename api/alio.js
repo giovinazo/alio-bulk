@@ -515,10 +515,14 @@ async function opDownload(url, request) {
   const kind = param(url, 'kind', /^(pdf|file|dfile|rule|upload|fileno)$/);
   let path = '';
   let hint = param(url, 'name', RE.fname, { required: false });
+  // 버셀 CDN 캐시 기간(초). 같은 파일을 두 번째부터는 함수를 거치지 않고 CDN이 내보낸다.
+  // 파일 번호가 고정된 첨부는 30일, 공시 본문 PDF는 7일, "최신 규정"처럼 바뀔 수 있는 것은 1일.
+  let cdnTtl = 30 * 86400;
   switch (kind) {
     case 'pdf': {
       const dn = param(url, 'dn', RE.digits);
       path = `/download/pdf.json?disclosureNo=${dn}`;
+      cdnTtl = 7 * 86400;
       break;
     }
     case 'file': {
@@ -542,6 +546,7 @@ async function opDownload(url, request) {
         if (!latest) return json({ error: 'NO_FILE', message: '규정에 첨부된 파일이 없습니다' }, 404);
         no = latest.no;
         hint = latest.name || hint;
+        cdnTtl = 86400;
       }
       path = `/download/rulefiledown.json?fileNo=${no}`;
       break;
@@ -585,7 +590,9 @@ async function opDownload(url, request) {
     'Content-Type': contentTypeFor(name),
     'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
     'X-File-Name': encodeURIComponent(name),
-    'Cache-Control': 'private, no-store',
+    // 브라우저는 1시간, 버셀 CDN은 cdnTtl 동안 보관(20MB 넘는 응답은 CDN이 캐시하지 않음)
+    'Cache-Control': 'public, max-age=3600',
+    'Vercel-CDN-Cache-Control': `max-age=${cdnTtl}`,
   });
   const len = resp.headers.get('content-length');
   if (len && /^\d+$/.test(len)) headers.set('Content-Length', len);
